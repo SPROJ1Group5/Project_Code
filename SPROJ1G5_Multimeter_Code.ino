@@ -1,9 +1,9 @@
 #include <LiquidCrystal_I2C.h>
 
 //pin numbering may change throughout the project
-const byte freqPin = 8 , buzzerPin = 12, buttonPin = 13 , LCD_I2C_ADDR = 0x27 , LCD_ROWS = 20 , LCD_COLS = 4 ;
+const byte freqPin = 8 , buzzerPin = 12, buttonPin = 13 , LCD_I2C_ADDR = 0x27 , LCD_ROWS = 20 , LCD_COLS = 4 , button_bounceoff_delay = 180 ;
 const int buzzerTone = 3000 ;
-byte button_bounceoff_delay = 180 , mode_select = 0 , previous_mode = 0 , button_value ;
+byte mode_select = 0 , previous_mode = 0 , button_value ;
 bool  LCD_cleared = false ;
 unsigned long highPeriod , lowPeriod ; //for the frequency measurement
 float frequency_value , voltage_conversion_factor = 20 / 1023 , amperage_conversion_factor = 500 / 1023 ; //in [Hz], [V] and [mA]
