@@ -12,6 +12,14 @@ String to_show ;
 
 LiquidCrystal_I2C LCD ( LCD_I2C_ADDR , LCD_ROWS , LCD_COLS ) ; //SDA - Pin A4 | SCL - Pin A5
 
+enum options {
+  NOT_CHOSEN = 0 ,
+  VOLT = 1 ,
+  AMP = 2 ,
+  OHM = 3 ,
+  FREQ = 4 ,
+  CONT = 5 } ;
+
 void checkButtonState ( void ) {
     //this function polls the button and increments the mode_select variable based on the state
     if ( !digitalRead ( buttonPin ) ) {
@@ -45,22 +53,28 @@ void setup ( ) {
 void loop ( ) {
     checkButtonState ( ) ;
 
-    if ( mode_select != 0 && mode_select != previous_mode ) {
+    if ( mode_select != NOT_CHOSEN && mode_select != previous_mode ) {
       previous_mode = mode_select ;
       if ( !LCD_cleared ) {
         LCD_cleared = true ;
         LCD.clear ( ) ; }
+
       switch ( mode_select ) {
-        case 1 : to_show = "      Voltmeter     " ; break ;
-        case 2 : to_show = "     Ampermeter     " ; break ;
-        case 3 : to_show = "      Ohm-meter     " ; break ;
-        case 4 : to_show = "   Frequency-meter  " ; break ;
-        case 5 : to_show = "  Continuity test   " ; break ; }
+        case VOLT : to_show = "      Voltmeter     " ; break ;
+        case AMP : to_show = "     Ampermeter     " ; break ;
+        case OHM : to_show = "      Ohm-meter     " ; break ;
+        case FREQ : to_show = "   Frequency-meter  " ; break ;
+        case CONT : to_show = "  Continuity test   " ; break ;
+        default : break ;
+      }
+
       LCD.setCursor ( 0 , 0 ) ;
-      LCD.print ( to_show ) ; }
+      LCD.print ( to_show ) ; 
+    }
 
     switch ( mode_select ) {
-        case 5: continuityTest ( ) ; break ;
+        case CONT : continuityTest ( ) ; break ;
+        default : break ;
 
 
     }
