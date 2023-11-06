@@ -4,20 +4,23 @@
 //#include <EEPROM.h>
 
 //pin numbering may change throughout the project
-const byte total_modes = 6 , continuityPin = 5 , freqPin = 12 , buzzerPin = 4 , INA_ADDR = 0x40 ,
-           buttonPin = 3 , LCD_I2C_ADDR = 0x27 , LCD_ROWS = 20 , LCD_COLS = 4 , bounceDelay = 170 ;
-byte mode_select = 0 , printing_poll = 0 , samples , idx ;
-volatile bool changed = false ;
+const byte total_modes = 6 , continuityPin = 5 , freqPin = 6 , buzzerPin = 4 , INA_ADDR = 0x40 ,
+           nextButtonPin = 3 , prevButtonPin = 2 , LCD_ADDR = 0x27 , LCD_ROWS = 20 , LCD_COLS = 4 , bounceDelay = 170 ;
+byte mode_select = 1 , printing_poll = 0 , samples , idx ;
+volatile bool next = false , prev = false ;
 const unsigned int buzzerTone = 2000 ;
 unsigned long highPeriod , lowPeriod ;
 float upper_correction_limit = 30000.0 , freq_switch_limit = 100.0 , frequency , readout , volt_conv_fact = 20 / 1023 ,
       freq_calib_factor = 1.0555 , current_calib_factor = 0.86 , millisecs = 1000000.0 , current , amp_conv_fact = 500 / 1023 ; //in [V] and [mA]
 
-LiquidCrystal_I2C LCD ( LCD_I2C_ADDR , LCD_ROWS , LCD_COLS ) ;      //SDA - Pin A4
+LiquidCrystal_I2C LCD ( LCD_ADDR , LCD_ROWS , LCD_COLS ) ;      //SDA - Pin A4
 Adafruit_INA219 INA219 ( INA_ADDR ) ;                               //SCL - Pin A5
 
-void buttonPressed ( void ) {
-  changed = true ; }
+void nextButtonPressed ( void ) {
+  next = true ; }
+
+void prevButtonPressed ( void ) {
+  prev = true ; }
 
 void currentTest ( void ) {     //min 3 mA
   current = 0 ;                 //max. 2A
@@ -53,11 +56,13 @@ void continuityTest ( void ) {      //14.2kΩ cutoff resistance
     else {
       noTone ( buzzerPin ) ;
       LCD.setCursor( 0 , 2 ) ;
-      LCD.print ( "                    " ) ; } }
+      LCD.print ( "   NOT  CONNECTED   " ) ; } }
 
 void setup ( ) {
-    pinMode ( buttonPin , INPUT_PULLUP ) ;
-    attachInterrupt ( digitalPinToInterrupt ( buttonPin ) , buttonPressed , FALLING ) ;
+    pinMode ( nextButtonPin , INPUT_PULLUP ) ;
+    pinMode ( prevButtonPin , INPUT_PULLUP ) ;
+    attachInterrupt ( digitalPinToInterrupt ( nextButtonPin ) , nextButtonPressed , FALLING ) ;
+    attachInterrupt ( digitalPinToInterrupt ( prevButtonPin ) , prevButtonPressed , FALLING ) ;
     pinMode ( continuityPin , INPUT ) ;
     pinMode ( freqPin , INPUT ) ;
     pinMode ( buzzerPin , OUTPUT ) ;
@@ -68,19 +73,22 @@ void setup ( ) {
 
 void loop ( ) {
 
-    if ( changed ) {
+    if ( next || prev ) {
       delay ( bounceDelay ) ;
-      changed = false ;
+      if ( next ) mode_select++ ;
+      if ( prev ) mode_select-- ;
+      next = false ;
+      prev = false ;
       LCD.clear ( ) ;
       noTone ( buzzerPin ) ;
-      mode_select++ ;
-      if ( mode_select == total_modes ) mode_select = 0 ; }
+      if ( mode_select == total_modes + 1 ) mode_select = 1 ;
+      if ( mode_select == 0 ) mode_select = total_modes ; }
 
     switch ( mode_select ) {
-      case 0 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "      Voltmeter     " ) ; break ;
-      case 1 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "     Ampermeter     " ) ; currentTest ( ) ; break ;
-      case 2 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "      Ohm-meter     " ) ; break ;
-      case 3 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "   Frequency-meter  " ) ; frequencyTest ( ) ;  break ;
-      case 4 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "  Continuity test   " ) ; continuityTest ( ) ; break ;
-      case 5 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "  Temperature test  " ) ; break ;
+      case 1 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "      Voltmeter     " ) ; break ;
+      case 2 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "     Ampermeter     " ) ; currentTest ( ) ; break ;
+      case 3 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "      Ohm-meter     " ) ; break ;
+      case 4 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "   Frequency-meter  " ) ; frequencyTest ( ) ;  break ;
+      case 5 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "  Continuity test   " ) ; continuityTest ( ) ; break ;
+      case 6 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "  Temperature test  " ) ; break ;
       default : break ; } }
