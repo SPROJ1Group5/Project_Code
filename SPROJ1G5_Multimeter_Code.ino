@@ -5,7 +5,7 @@
 
 //pin numbering may change throughout the project
 const byte total_modes = 6 , freqPin = 6 , buzzerPin = 4 , INA_ADDR = 0x40 , resistanceAdcPin = A0 ,
-           nextButtonPin = 3 , prevButtonPin = 2 , LCD_ADDR = 0x27 , LCD_ROWS = 20 , LCD_COLS = 4 , bounceDelay = 160 , resistanceRanges = 5 ;
+           nextButtonPin = 3 , prevButtonPin = 2 , LCD_ADDR = 0x27 , LCD_ROWS = 20 , LCD_COLS = 4 , bounceDelay = 180 , resistanceRanges = 5 ;
 const byte resistanceSelectPins [ 5 ] = { 12 , 11 , 10 , 9 , 8 } ;
 byte mode_select = 1 , printing_poll = 0 , idx , samples , resHalfIndex ;
 volatile bool next = false , prev = false ;
@@ -14,7 +14,7 @@ int resistanceMeasuredValues [ 5 ] , val , half = 512 ;
 float resistanceFactors [ 5 ] = { 100 / 1023 , 1000 / 1023 , 10000 / 1023 , 100000 / 1023 , 1000000 / 1023 } ;
 unsigned long highPeriod , lowPeriod , totalPeriod ;
 float upper_correction_limit = 30000.0 , freq_switch_limit = 100.0 , frequency , readout , resMultiplyFactor , contCutoff = 10.0 ,
-      freq_calib_factor = 1.0555 , current_calib_factor = 0.86 , millisecs = 1000000.0 , current , resDivider = 1.0 ;
+      freq_calib_factor = 1.0555 , current_calib_factor = 0.868 , millisecs = 1000000.0 , current , resDivider = 1.0 ;
 String resUnit ;
 
 LiquidCrystal_I2C LCD ( LCD_ADDR , LCD_ROWS , LCD_COLS ) ;      //SDA - Pin A4
@@ -51,16 +51,18 @@ void resistanceTest ( void ) {
   resHalfIndex = getClosestToHalf ( resistanceMeasuredValues , resistanceRanges ) ;
 
   switch ( resHalfIndex ) {
-    case 0  : resMultiplyFactor = resistanceFactors [ 0 ] ; resUnit = "Ω"  ; resDivider = 1.0       ; break ;
-    case 1  : resMultiplyFactor = resistanceFactors [ 1 ] ; resUnit = "Ω"  ; resDivider = 1.0       ; break ;
-    case 2  : resMultiplyFactor = resistanceFactors [ 2 ] ; resUnit = "kΩ" ; resDivider = 1000.0    ; break ;
-    case 3  : resMultiplyFactor = resistanceFactors [ 3 ] ; resUnit = "kΩ" ; resDivider = 1000.0    ; break ;
-    case 4  : resMultiplyFactor = resistanceFactors [ 4 ] ; resUnit = "MΩ" ; resDivider = 1000000.0 ; break ;
+    case 0  : resMultiplyFactor = resistanceFactors [ 0 ] ; resUnit = " Ohm"  ; resDivider = 1.0       ; break ;
+    case 1  : resMultiplyFactor = resistanceFactors [ 1 ] ; resUnit = " Ohm"  ; resDivider = 1.0       ; break ;
+    case 2  : resMultiplyFactor = resistanceFactors [ 2 ] ; resUnit = " kOhm" ; resDivider = 1000.0    ; break ;
+    case 3  : resMultiplyFactor = resistanceFactors [ 3 ] ; resUnit = " kOhm" ; resDivider = 1000.0    ; break ;
+    case 4  : resMultiplyFactor = resistanceFactors [ 4 ] ; resUnit = " MOhm" ; resDivider = 1000000.0 ; break ;
     default : break ; }
 
   readout = ( ( float ) resistanceMeasuredValues [ resHalfIndex ] * resMultiplyFactor ) / resDivider ;
   LCD.setCursor ( 0 , 2 ) ;
-  LCD.print ( String ( readout ) + resUnit + "        " ) ; }
+
+  if ( readout >= 0.5 ) LCD.print ( String ( readout ) + resUnit + "         " ) ;
+  else LCD.print ( "         OL         " ) ; }
 
 void nextButtonPressed ( void ) {
   next = true ; }
@@ -77,10 +79,10 @@ void currentTest ( void ) {     //min 3 mA
   LCD.setCursor ( 0 , 2 ) ;
   LCD.print ( String ( readout ) + " mA         " ) ; }
 
-void frequencyTest ( void ) {     //3Hz -> Lower-Bound Frequency
+void frequencyTest ( void ) {     //20Hz -> Lower-Bound Frequency
   printing_poll += 1 ;            //~100 kHz -> Upper-Bound Frequency (+/- 5% error)
   frequency = 0 ;
-  samples = 8 ;
+  samples = 5 ;
   for ( idx = 0 ; idx < samples ; idx++  ) {
     highPeriod = pulseIn ( freqPin , HIGH ) ;
     lowPeriod = pulseIn ( freqPin , LOW ) ;
@@ -98,12 +100,12 @@ void continuityTest ( void ) {
   setResistancePin ( 0 ) ;
   val = analogRead ( resistanceAdcPin ) * resistanceFactors [ 0 ] ;
 
-  if ( (float) val <= contCutoff && (float) val != 0.0 ) {
+  if ( (float) val <= contCutoff /*&& (float) val > 0.0001*/ ) {
     tone ( buzzerPin , buzzerTone ) ;
     LCD.setCursor( 0 , 1 ) ;
     LCD.print ( "      CONNECTED     " ) ;
-    LCD.setCursor( 0 , 2 ) ;
-    LCD.print ( String ( val ) + "Ω      " ) ; }
+    LCD.setCursor ( 0 , 2 ) ;
+    LCD.print ( String ( val ) + " Ohm       " ) ; }
   
   else {
       noTone ( buzzerPin ) ;
