@@ -10,7 +10,7 @@ const unsigned long resDelay = 2 , bounceDelay = 180 ;
 const float resistanceFactors [ 5 ] = { 100.0 / 1023.0 , 508.0 / 1023.0 , 10000.0 / 1023.0 , 100000.0 / 1023.0 , 1000000.0 / 1023.0 } ;
 
 //Button Pinouts - Pin numbering may change throughout the project
-const byte freqPin = 6 , buzzerPin = 4 , nextButtonPin = 3 , prevButtonPin = 2 , resistanceAdcPin = A1 ;
+const byte freqPin = 5 , buzzerPin = 4 , nextButtonPin = 3 , prevButtonPin = 2 , resistanceAdcPin = A0 ;
 const byte resistanceSelectPins [ resistanceRanges ] = { 12 , 11 , 10 , 9 , 8 } ;
 
 //Variables
@@ -40,8 +40,9 @@ byte getClosestToHalf ( int * array , const byte size ) {
   return minIndex; }
 
 void resistanceTest ( void ) {
+
   resistance = 0 ;
-  samples = 40 ;
+  samples = 35 ;
 
   for ( j = 0 ; j < samples ; j++ ) {
     for ( idx = 0 ; idx < resistanceRanges ; idx++ ) {
@@ -81,8 +82,9 @@ void nextButtonPressed ( void ) {
 void prevButtonPressed ( void ) {
   prev = true ; }
 
-void currentTest ( void ) {     //min 3 mA
-  current = 0 ;                 //max. 2A
+void currentTest ( void ) {     //min 3 mA | max. 2A
+
+  current = 0 ;
   samples = 250 ;
 
   for ( idx = 0 ; idx < samples ; idx++  ) {
