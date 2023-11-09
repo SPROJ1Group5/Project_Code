@@ -4,13 +4,13 @@
 //#include <EEPROM.h>
 
 //pin numbering may change throughout the project
-const byte total_modes = 6 , continuityPin = 5 , freqPin = 6 , buzzerPin = 4 , INA_ADDR = 0x40 , resistanceAdcPin = A0 ,
+const byte total_modes = 6 , freqPin = 6 , buzzerPin = 4 , INA_ADDR = 0x40 , resistanceAdcPin = A0 ,
            nextButtonPin = 3 , prevButtonPin = 2 , LCD_ADDR = 0x27 , LCD_ROWS = 20 , LCD_COLS = 4 , bounceDelay = 160 , resistanceRanges = 5 ;
 const byte resistanceSelectPins [ 5 ] = { 12 , 11 , 10 , 9 , 8 } ;
 byte mode_select = 1 , printing_poll = 0 , idx , samples , resHalfIndex ;
 volatile bool next = false , prev = false ;
 const unsigned int buzzerTone = 2000 ;
-int resistanceMeasuredValues [ 5 ] ;
+int resistanceMeasuredValues [ 5 ] , val , half = 512 ;
 float resistanceFactors [ 5 ] = { 100 / 1023 , 1000 / 1023 , 10000 / 1023 , 100000 / 1023 , 1000000 / 1023 } ;
 unsigned long highPeriod , lowPeriod , totalPeriod ;
 float upper_correction_limit = 30000.0 , freq_switch_limit = 100.0 , frequency , readout , resMultiplyFactor , contCutoff = 10.0 ,
@@ -20,16 +20,24 @@ String resUnit ;
 LiquidCrystal_I2C LCD ( LCD_ADDR , LCD_ROWS , LCD_COLS ) ;      //SDA - Pin A4
 Adafruit_INA219 INA219 ( INA_ADDR ) ;                           //SCL - Pin A5
 
+/*unsigned long freqTime [ 2 ] = { 0 , 0 } ;
+bool sel = false;                        
+
+void getHalfPeriod() {
+  freqTime[sel ? 1:0] = millis();
+  sel != sel;
+}*/
+
 void setResistancePin ( byte onPin ) {
   for ( byte g = 0 ; g < 5 ; g++ ) {
     if ( g == onPin ) digitalWrite ( resistanceSelectPins [ g ] , LOW ) ;
     else digitalWrite ( resistanceSelectPins [ g ] , HIGH ) ; } }
 
 byte getClosestToHalf ( int * array , const byte size ) {
-  int minValue = abs ( array [ 0 ] - 512 ) ;
+  int minValue = abs ( array [ 0 ] - half ) ;
   byte minIndex = 0 ;
   for ( byte i = 1 ; i < size ; i++ ) {
-    if ( abs ( array [ i ] - 512 ) < minValue ) {
+    if ( abs ( array [ i ] - half ) < minValue ) {
       minValue = array [ i ] ;
       minIndex = i ; } }
   return minIndex; }
@@ -88,23 +96,25 @@ void frequencyTest ( void ) {     //3Hz -> Lower-Bound Frequency
 void continuityTest ( void ) {
 
   setResistancePin ( 0 ) ;
+  val = analogRead ( resistanceAdcPin ) * resistanceFactors [ 0 ] ;
 
-  if ( ( (float) analogRead ( resistanceAdcPin ) * resistanceFactors [ 0 ] ) <= contCutoff ) {
-    tone ( buzzerPin , buzzerTone ) ; 
+  if ( (float) val <= contCutoff && (float) val != 0.0 ) {
+    tone ( buzzerPin , buzzerTone ) ;
+    LCD.setCursor( 0 , 1 ) ;
+    LCD.print ( "      CONNECTED     " ) ;
     LCD.setCursor( 0 , 2 ) ;
-    LCD.print ( "     CONNECTED      " ) ; }
+    LCD.print ( String ( val ) + "Ω      " ) ; }
   
   else {
       noTone ( buzzerPin ) ;
       LCD.setCursor( 0 , 2 ) ;
-      LCD.print ( "   NOT  CONNECTED   " ) ; } }
+      LCD.print ( "         OL         " ) ; } }
 
 void setup ( ) {
     pinMode ( nextButtonPin , INPUT_PULLUP ) ;
     pinMode ( prevButtonPin , INPUT_PULLUP ) ;
     attachInterrupt ( digitalPinToInterrupt ( nextButtonPin ) , nextButtonPressed , FALLING ) ;
     attachInterrupt ( digitalPinToInterrupt ( prevButtonPin ) , prevButtonPressed , FALLING ) ;
-    pinMode ( continuityPin , INPUT ) ;
     pinMode ( freqPin , INPUT ) ;
     pinMode ( buzzerPin , OUTPUT ) ;
     LCD.init ( ) ;
