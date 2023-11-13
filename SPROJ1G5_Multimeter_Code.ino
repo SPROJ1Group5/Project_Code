@@ -87,8 +87,13 @@ void resistanceTest ( void ) {
     LCD.print ( "      Overload      " ) ; }
 
   else {
+    
+    if ( resHalfIndex == 4 && readout > 1000.0 ) {
+      readout /= 1000.0 ;
+      resUnit = " MOhm" ; }
+
     LCD.setCursor ( 0 , 1 ) ;
-    LCD.print ( "Range: " + resRange ) ;
+    LCD.print ( "     Range: " + resRange + "    " ) ;
     LCD.setCursor ( 0 , 2 ) ;
     LCD.print ( String ( readout ) + resUnit + "          " ) ; } }
 
@@ -156,7 +161,8 @@ void frequencyTest ( void ) {     //25Hz -> Lower-Bound Frequency
 void continuityTest ( void ) {
 
   setResistancePin ( 0 ) ;
-  contVal = (float) ( analogRead ( resistanceAdcPin ) * resistanceFactors [ 0 ] ) / (float) getAbsVal ( full - resistanceMeasuredValues [ resHalfIndex ] ) ;
+  contVal = (float) analogRead ( resistanceAdcPin ) ;
+  contVal = (float) ( ( contVal * resistanceFactors [ 0 ] ) / (float) getAbsVal ( full - (int) contVal ) ) ;
 
   if ( contVal <= contCutoff ) {
     resUnit = " Ohm           " ;
@@ -200,11 +206,9 @@ void loop ( ) {
     if ( next || prev ) {
 
       delay ( bounceDelay ) ;
-      if ( next ) mode_select++ ;
-      if ( prev ) mode_select-- ;
-      next = false ;
-      prev = false ;
-
+      if ( next ) { mode_select++ ; next = false ; }
+      if ( prev ) { mode_select-- ; prev = false ; }
+      
       for ( h = 0 ; h < resistanceRanges ; h++ ) {
         digitalWrite ( resistanceSelectPins [ h ] , HIGH ) ; }
 
