@@ -1,31 +1,29 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include <Adafruit_INA219.h>
-//#include <EEPROM.h>
 
 //Defined Constants
-const byte total_modes = 6 , INA_ADDR = 0x40 , LCD_ADDR = 0x27 , LCD_ROWS = 20 , LCD_COLS = 4 , resistanceRanges = 5 ;
-const unsigned int buzzerTone = 2000 ;
+const byte total_modes = 6 , LCD_ADDR = 0x27 , LCD_ROWS = 20 , LCD_COLS = 4 , resistanceRanges = 5 ;
+const unsigned int buzzerTone = 3000 ;
 const int full = 1023 , half = 512 ;
-const unsigned long resDelay = 2 , bounceDelay = 170 , timeOut = 100000 ;
+const unsigned long adcDelay = 4 , bounceDelay = 170 , timeOut = 100000 ;
 const float resistanceFactors [ 5 ] = { 99.8 , 1197.0 , 10000.0 , 100800.0 , 1011000.0 } ;
-const float freqCorrectionLimit = 30000.0 , contCutoff = 10.0 , freqCalibFactor = 1.0555 , currentCalibFactor = 0.855 ;
-const float currentCorrectionLimit = 90.0 , millisecs = 1000000.0 , resCorrect = 2.0 , currentLimit = 1.0 ;
+const float voltageFactor = 5.0 / 1023.0 ;
+const float freqCorrectionLimit = 30000.0 , contCutoff = 10.0 , freqCalibFactor = 1.0555 , currentCalibFactor = 1.31 , Vref = 2495.12 , currentOffset = 155.0 ;
+const float millisecs = 1000000.0 , currFactor = 1000.0 / 400.0 , unitValue = ( 5.0 / 1023.0 ) * 1000 ; //   1000mA per 400mV | (5V/1023)*1000 ~= 4.887 mV
 
 //Button Pinouts - Pin numbering may change throughout the project
-const byte freqPin = 5 , buzzerPin = 4 , nextButtonPin = 3 , prevButtonPin = 2 , voltSel = 13 , resistanceAdcPin = A0 , voltageAdcPin = A1 ;
-const byte resistanceSelectPins [ resistanceRanges ] = { 12 , 11 , 10 , 9 , 8 } ;
+const byte freqPin = 5 , buzzerPin = 4 , nextButtonPin = 3 , prevButtonPin = 2 , voltSel = 7 , resistanceAdcPin = A0 , voltageAdcPin = A1 ;
+const byte currentAdcPin = A2 , resistanceSelectPins [ resistanceRanges ] = { 12 , 11 , 10 , 9 , 8 } ;
 
 //Variables
 byte mode_select = 1 , idx , samples , g , j , h , resHalfIndex ;
 volatile bool next = false , prev = false ;
 int resistanceMeasuredValues [ resistanceRanges ] ;
 unsigned long highPeriod , lowPeriod ;
-float frequency , readout , resMultiplyFactor , resDivider , current , resistance , contVal ;
+float frequency , readout , resMultiplyFactor , resDivider , current , resistance , contVal , shuntVoltage , currSensorVal , voltageVal ;
 String resUnit , resRange , freqUnit , currentUnit ;
 
-LiquidCrystal_I2C LCD ( LCD_ADDR , LCD_ROWS , LCD_COLS ) ;      //SDA - Pin A4
-Adafruit_INA219 INA219 ( INA_ADDR ) ;                           //SCL - Pin A5
+LiquidCrystal_I2C LCD ( LCD_ADDR , LCD_ROWS , LCD_COLS ) ;      //    SDA - Pin A4 | SCL - Pin A5
 
 void setResistancePin ( byte onPin ) {
   for ( g = 0 ; g < resistanceRanges ; g++ ) {
@@ -48,8 +46,9 @@ byte getClosestToFull ( int * array , const byte size ) {
 
 bool checkDisconnectedRes( void ) {
   byte count = 0 ;
+  int dist = 80 ;
   for ( h = 0 ; h < resistanceRanges ; h++ ) {
-    if ( getAbsVal ( full - resistanceMeasuredValues [ h ] ) < 80 ) count++ ; }
+    if ( getAbsVal ( full - resistanceMeasuredValues [ h ] ) <= dist ) count++ ; }
   return count == resistanceRanges ; }
 
 void resistanceTest ( void ) {
@@ -62,17 +61,17 @@ void resistanceTest ( void ) {
 
     for ( idx = 0 ; idx < resistanceRanges ; idx++ ) {
       setResistancePin ( idx ) ;
-      delay ( resDelay ) ;
+      delay ( adcDelay ) ;
       resistanceMeasuredValues [ idx ] = analogRead ( resistanceAdcPin ) ; }
 
     digitalWrite ( resistanceSelectPins [ 4 ] , HIGH ) ;
     resHalfIndex = getClosestToFull ( resistanceMeasuredValues , resistanceRanges ) ;
 
     switch ( resHalfIndex ) {
-      case 0  : resMultiplyFactor = resistanceFactors [ 0 ] ; resUnit = " Ohm"   ; resRange = "100R" ; resDivider = 1.0 ; break ;
-      case 1  : resMultiplyFactor = resistanceFactors [ 1 ] ; resUnit = " Ohm"   ; resRange = "1K"   ; resDivider = 1.0 ; break ;
+      case 0  : resMultiplyFactor = resistanceFactors [ 0 ] ; resUnit = " Ohm"   ; resRange = "100R" ; resDivider = 1.0    ; break ;
+      case 1  : resMultiplyFactor = resistanceFactors [ 1 ] ; resUnit = " Ohm"   ; resRange = "1K"   ; resDivider = 1.0    ; break ;
       case 2  : resMultiplyFactor = resistanceFactors [ 2 ] ; resUnit = " kOhm"  ; resRange = "10K"  ; resDivider = 1000.0 ; break ;
-      case 3  : resMultiplyFactor = resistanceFactors [ 3 ] ; resUnit = " kOhm"  ; resRange = "100K"  ; resDivider = 1000.0 ; break ;
+      case 3  : resMultiplyFactor = resistanceFactors [ 3 ] ; resUnit = " kOhm"  ; resRange = "100K" ; resDivider = 1000.0 ; break ;
       case 4  : resMultiplyFactor = resistanceFactors [ 4 ] ; resUnit = " kOhm"  ; resRange = "1M"   ; resDivider = 1000.0 ; break ;
       default : break ; }
 
@@ -95,14 +94,29 @@ void resistanceTest ( void ) {
     LCD.setCursor ( 0 , 1 ) ;
     LCD.print ( "     Range: " + resRange + "    " ) ;
     LCD.setCursor ( 0 , 2 ) ;
-    LCD.print ( String ( readout ) + resUnit + "          " ) ; } }
+    LCD.print ( "     " + String ( readout ) + resUnit + "       " ) ; } }
 
 void voltageTest ( void ) {
+  readout = 0.0 ;
+  voltageVal = 0.0 ;
+  samples = 100 ;
 
+  for ( h = 0 ; h < samples ; h++ ) {
+    voltageVal = (float) analogRead ( voltageAdcPin ) ;
 
+    if ( digitalRead ( voltSel ) ) voltageVal *= 5.77455 ;
+    else voltageVal *= 1.533 ;
 
+    voltageVal *= voltageFactor ;
+    if ( voltageVal < 0.39 ) voltageVal = 0.0 ;
+    readout += voltageVal ; }
 
-}
+  readout /= (float) samples ;
+  if ( readout >= 13.5 ) readout *= 1.015 ;
+  if ( readout <= 4.9 ) readout *= 0.97 ;
+
+  LCD.setCursor( 0 , 2 ) ;
+  LCD.print ( "      " + String ( readout ) + " V       " ) ; }
 
 void nextButtonPressed ( void ) {
   next = true ; }
@@ -111,34 +125,37 @@ void prevButtonPressed ( void ) {
   prev = true ; }
 
 void currentTest ( void ) {     //min 3 mA | max. 2A
-  readout = 0.0 ;
-  current = 0.0 ;
-  samples = 250 ;
+  currSensorVal = 0.0 ;
+  current = 0 ;
+  samples = 100 ;
 
-  for ( idx = 0 ; idx < samples ; idx++  ) {
-    current += INA219.getCurrent_mA ( ) ; }
+  for ( idx = 0 ; idx < samples ; idx++ ) {
+    currSensorVal += (float) analogRead ( currentAdcPin ) ;
+    delay ( adcDelay ) ; }
 
-  readout = current / (float) samples ;
-
-  if ( readout >= currentCorrectionLimit ) readout *= currentCalibFactor ;
-
-  if ( ( readout / 1000.0 ) >= currentLimit ) {
-    currentUnit = " A" ;
-    readout /= 1000.0 ; }
-
-  else currentUnit = " mA" ;
+  currSensorVal /= (float) samples ;
+  //Serial.print ( currSensorVal ) ;
+  //Serial.print ( "  " ) ;
+  shuntVoltage = unitValue * currSensorVal ;
+  //Serial.println ( shuntVoltage ) ;
+  current = ( ( shuntVoltage - Vref ) * currFactor * currentCalibFactor ) /*- currentOffset*/ ;
 
   LCD.setCursor ( 0 , 2 ) ;
 
-  if ( readout > currentLimit ) LCD.print ( String ( readout ) + currentUnit + "         " ) ;
+  if ( current <= 1000.0 ) currentUnit = " mA" ;
 
-  else LCD.print ( "                    " ) ; }
+  if ( current > 1000.0 ) {
+    currentUnit = " A" ;
+    current /= 1000.0 ; }
+
+  if ( current > 0.0 ) LCD.print ( "     " + String ( current ) + currentUnit + "           " ) ;
+  else LCD.print ( "         OL         " ) ; }
 
 void frequencyTest ( void ) {     //25Hz -> Lower-Bound Frequency
                                   //~100 kHz -> Upper-Bound Frequency (+/- 5% error)
   frequency = 0.0 ;
   readout = 0.0 ;
-  samples = 20 ;
+  samples = 30 ;
 
   for ( idx = 0 ; idx < samples ; idx++  ) {
     highPeriod = pulseIn ( freqPin , HIGH , timeOut ) ;
@@ -149,14 +166,14 @@ void frequencyTest ( void ) {     //25Hz -> Lower-Bound Frequency
 
   if ( readout >= freqCorrectionLimit ) readout *= freqCalibFactor ;
 
-  if ( ( readout / 1000.0 ) >= 1.0 ) {
+  if ( readout >= 1000.0 ) {
     readout /= 1000.0 ;
-    freqUnit = " kHz            " ; }
+    freqUnit = " kHz" ; }
   
-  else freqUnit = " Hz          " ;
+  else freqUnit = " Hz" ;
 
   LCD.setCursor ( 0 , 2 ) ;
-  LCD.print ( String ( readout ) + freqUnit ) ; }
+  LCD.print ( "    " + String ( readout ) + freqUnit + "        " ) ; }
 
 void continuityTest ( void ) {
 
@@ -181,6 +198,8 @@ void continuityTest ( void ) {
 
 void setup ( ) {
 
+    //Serial.begin ( 9600 ) ;
+
     for ( h = 0 ; h < resistanceRanges ; h++ ) {
       pinMode ( resistanceSelectPins [ h ] , OUTPUT ) ;
       digitalWrite ( resistanceSelectPins [ h ] , HIGH ) ; }
@@ -198,8 +217,7 @@ void setup ( ) {
 
     LCD.init ( ) ;
     LCD.backlight ( ) ;
-    LCD.clear ( ) ;
-    INA219.begin ( ) ; }
+    LCD.clear ( ) ; }
 
 void loop ( ) {
 
@@ -221,7 +239,7 @@ void loop ( ) {
     switch ( mode_select ) {
       case 1 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "      Voltmeter     " ) ; voltageTest ( ) ; break ;
       case 2 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "     Ampermeter     " ) ; currentTest ( ) ; break ;
-      case 3 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "      Ohm-meter     " ) ; resistanceTest ( ) ; break ;
+      case 3 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "     Ohm-meter      " ) ; resistanceTest ( ) ; break ;
       case 4 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "   Frequency-meter  " ) ; frequencyTest ( ) ;  break ;
       case 5 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "  Continuity test   " ) ; continuityTest ( ) ; break ;
       case 6 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "  Temperature test  " ) ; break ;
