@@ -44,16 +44,14 @@ byte getClosestToFull ( int * array , const byte size ) {
       minIndex = i ; } }
   return minIndex; }
 
-bool checkDisconnectedRes( void ) {
+bool checkDisconnectedRes ( void ) {
   byte count = 0 ;
-  int dist = 80 ;
-  for ( h = 0 ; h < resistanceRanges ; h++ ) {
-    if ( getAbsVal ( full - resistanceMeasuredValues [ h ] ) <= dist ) count++ ; }
+  int trigger = 80 ;
+  for ( g = 0 ; g < resistanceRanges ; g++ ) {
+    if ( getAbsVal ( full - resistanceMeasuredValues [ g ] ) <= trigger ) count++ ; }
   return count == resistanceRanges ; }
 
 void resistanceTest ( void ) {
-
-  readout = 0.0 ;
   resistance = 0.0 ;
   samples = 40 ;
 
@@ -62,7 +60,7 @@ void resistanceTest ( void ) {
     for ( idx = 0 ; idx < resistanceRanges ; idx++ ) {
       setResistancePin ( idx ) ;
       delay ( adcDelay ) ;
-      resistanceMeasuredValues [ idx ] = analogRead ( resistanceAdcPin ) ; }
+      resistanceMeasuredValues [ idx ] = analogRead ( resistanceAdcPin ) ; } //end for
 
     digitalWrite ( resistanceSelectPins [ 4 ] , HIGH ) ;
     resHalfIndex = getClosestToFull ( resistanceMeasuredValues , resistanceRanges ) ;
@@ -73,11 +71,11 @@ void resistanceTest ( void ) {
       case 2  : resMultiplyFactor = resistanceFactors [ 2 ] ; resUnit = " kOhm"  ; resRange = "10K"  ; resDivider = 1000.0 ; break ;
       case 3  : resMultiplyFactor = resistanceFactors [ 3 ] ; resUnit = " kOhm"  ; resRange = "100K" ; resDivider = 1000.0 ; break ;
       case 4  : resMultiplyFactor = resistanceFactors [ 4 ] ; resUnit = " kOhm"  ; resRange = "1M"   ; resDivider = 1000.0 ; break ;
-      default : break ; }
+      default : break ; } //end switch
 
-    resistance += ( ( ( float ) resistanceMeasuredValues [ resHalfIndex ] * resMultiplyFactor ) / (float) getAbsVal ( full - resistanceMeasuredValues [ resHalfIndex ] ) ) ; }
+    resistance += ( ( ( float ) resistanceMeasuredValues [ resHalfIndex ] * resMultiplyFactor ) / (float) getAbsVal ( full - resistanceMeasuredValues [ resHalfIndex ] ) ) ; } //end for
   
-  readout = resistance / ( (float) samples * resDivider ) ;
+  resistance /= (float) samples * resDivider ;    //take the average
 
   if ( checkDisconnectedRes ( ) ) {
     LCD.setCursor ( 0 , 1 ) ;
@@ -86,37 +84,38 @@ void resistanceTest ( void ) {
     LCD.print ( "      Overload      " ) ; }
 
   else {
-    
-    if ( resHalfIndex == 4 && readout > 1000.0 ) {
-      readout /= 1000.0 ;
+    if ( resHalfIndex == 4 && resistance > 1000.0 ) {
+      resistance /= 1000.0 ;
       resUnit = " MOhm" ; }
 
     LCD.setCursor ( 0 , 1 ) ;
     LCD.print ( "     Range: " + resRange + "    " ) ;
     LCD.setCursor ( 0 , 2 ) ;
-    LCD.print ( "     " + String ( readout ) + resUnit + "       " ) ; } }
+    LCD.print ( "     " + String ( resistance ) + resUnit + "       " ) ; } } //end resistanceTest
 
 void voltageTest ( void ) {
   readout = 0.0 ;
   voltageVal = 0.0 ;
-  samples = 100 ;
+  samples = 200 ;
 
   for ( h = 0 ; h < samples ; h++ ) {
     voltageVal = (float) analogRead ( voltageAdcPin ) ;
 
     if ( digitalRead ( voltSel ) ) voltageVal *= 5.77455 ;
-    else voltageVal *= 1.533 ;
+    if ( !digitalRead ( voltSel ) ) voltageVal *= 1.533 ;
 
     voltageVal *= voltageFactor ;
-    if ( voltageVal < 0.39 ) voltageVal = 0.0 ;
-    readout += voltageVal ; }
 
-  readout /= (float) samples ;
+    if ( voltageVal < 0.39 ) voltageVal = 0.0 ;
+    readout += voltageVal ; } //end for
+
+  readout /= (float) samples ;    //take the average
+
   if ( readout >= 13.5 ) readout *= 1.015 ;
   if ( readout <= 4.9 ) readout *= 0.97 ;
 
   LCD.setCursor( 0 , 2 ) ;
-  LCD.print ( "      " + String ( readout ) + " V       " ) ; }
+  LCD.print ( "      " + String ( readout ) + " V       " ) ; } //end voltageTest
 
 void nextButtonPressed ( void ) {
   next = true ; }
@@ -154,93 +153,89 @@ void currentTest ( void ) {     //min 3 mA | max. 2A
 void frequencyTest ( void ) {     //25Hz -> Lower-Bound Frequency
                                   //~100 kHz -> Upper-Bound Frequency (+/- 5% error)
   frequency = 0.0 ;
-  readout = 0.0 ;
   samples = 30 ;
 
   for ( idx = 0 ; idx < samples ; idx++  ) {
     highPeriod = pulseIn ( freqPin , HIGH , timeOut ) ;
     lowPeriod = pulseIn ( freqPin , LOW , timeOut ) ;
-    frequency += millisecs / (float) ( highPeriod + lowPeriod ) ; }
+    frequency += millisecs / (float) ( highPeriod + lowPeriod ) ; } //end for
 
-  readout = frequency / (float) samples ;
+  frequency /= (float) samples ;    //take the average
 
-  if ( readout >= freqCorrectionLimit ) readout *= freqCalibFactor ;
+  if ( frequency >= freqCorrectionLimit ) frequency *= freqCalibFactor ;
 
-  if ( readout >= 1000.0 ) {
-    readout /= 1000.0 ;
+  if ( frequency >= 1000.0 ) {
+    frequency /= 1000.0 ;
     freqUnit = " kHz" ; }
   
   else freqUnit = " Hz" ;
 
   LCD.setCursor ( 0 , 2 ) ;
-  LCD.print ( "    " + String ( readout ) + freqUnit + "        " ) ; }
+  LCD.print ( "    " + String ( frequency ) + freqUnit + "        " ) ; } //end frequencyTest
 
 void continuityTest ( void ) {
 
   setResistancePin ( 0 ) ;
   contVal = (float) analogRead ( resistanceAdcPin ) ;
-  contVal = (float) ( ( contVal * resistanceFactors [ 0 ] ) / (float) getAbsVal ( full - (int) contVal ) ) ;
+  contVal = ( contVal * resistanceFactors [ 0 ] ) / (float) getAbsVal ( full - (int) contVal ) ;
 
   if ( contVal <= contCutoff ) {
-    resUnit = " Ohm           " ;
+    resUnit = " Ohm" ;
     tone ( buzzerPin , buzzerTone ) ;
-    LCD.setCursor( 0 , 1 ) ;
+    LCD.setCursor ( 0 , 1 ) ;
     LCD.print ( "      CONNECTED     " ) ;
     LCD.setCursor ( 0 , 2 ) ;
-    LCD.print ( String ( contVal ) + resUnit ) ; }
+    LCD.print ( "      " + String ( contVal ) + resUnit + "         " ) ; } //end if
   
   else {
       noTone ( buzzerPin ) ;
       LCD.setCursor ( 0 , 1 ) ;
       LCD.print ( "                    " ) ;
       LCD.setCursor ( 0 , 2 ) ;
-      LCD.print ( "     Open Loop      " ) ; } }
+      LCD.print ( "     Open Loop      " ) ; } } //end continuityTest
 
 void setup ( ) {
+  for ( h = 0 ; h < resistanceRanges ; h++ ) {
+    pinMode ( resistanceSelectPins [ h ] , OUTPUT ) ;
+    digitalWrite ( resistanceSelectPins [ h ] , HIGH ) ; }
 
-    //Serial.begin ( 9600 ) ;
+  attachInterrupt ( digitalPinToInterrupt ( nextButtonPin ) , nextButtonPressed , FALLING ) ;
+  attachInterrupt ( digitalPinToInterrupt ( prevButtonPin ) , prevButtonPressed , FALLING ) ;
 
-    for ( h = 0 ; h < resistanceRanges ; h++ ) {
-      pinMode ( resistanceSelectPins [ h ] , OUTPUT ) ;
-      digitalWrite ( resistanceSelectPins [ h ] , HIGH ) ; }
+  pinMode ( nextButtonPin , INPUT_PULLUP ) ;
+  pinMode ( prevButtonPin , INPUT_PULLUP ) ;
+  pinMode ( resistanceAdcPin , INPUT ) ;
+  pinMode ( currentAdcPin , INPUT ) ;
+  pinMode ( voltageAdcPin , INPUT ) ;
+  pinMode ( freqPin , INPUT ) ;
+  pinMode ( voltSel , INPUT ) ;
+  pinMode ( buzzerPin , OUTPUT ) ;
 
-    pinMode ( nextButtonPin , INPUT_PULLUP ) ;
-    pinMode ( prevButtonPin , INPUT_PULLUP ) ;
-    attachInterrupt ( digitalPinToInterrupt ( nextButtonPin ) , nextButtonPressed , FALLING ) ;
-    attachInterrupt ( digitalPinToInterrupt ( prevButtonPin ) , prevButtonPressed , FALLING ) ;
-
-    pinMode ( resistanceAdcPin , INPUT ) ;
-    pinMode ( voltageAdcPin , INPUT ) ;
-    pinMode ( freqPin , INPUT ) ;
-    pinMode ( voltSel , INPUT ) ;
-    pinMode ( buzzerPin , OUTPUT ) ;
-
-    LCD.init ( ) ;
-    LCD.backlight ( ) ;
-    LCD.clear ( ) ; }
+  LCD.init ( ) ;
+  LCD.backlight ( ) ;
+  LCD.clear ( ) ; } //end setup
 
 void loop ( ) {
 
-    if ( next || prev ) {
-
-      delay ( bounceDelay ) ;
-      if ( next ) { mode_select++ ; next = false ; }
-      if ( prev ) { mode_select-- ; prev = false ; }
+  if ( next || prev ) {
+    delay ( bounceDelay ) ;
+    if ( next ) { mode_select++ ; next = false ; }
+    if ( prev ) { mode_select-- ; prev = false ; }
       
-      for ( h = 0 ; h < resistanceRanges ; h++ ) {
-        digitalWrite ( resistanceSelectPins [ h ] , HIGH ) ; }
+    for ( h = 0 ; h < resistanceRanges ; h++ ) {
+      digitalWrite ( resistanceSelectPins [ h ] , HIGH ) ; }
 
-      LCD.clear ( ) ;
-      noTone ( buzzerPin ) ;
+    LCD.clear ( ) ;
+    noTone ( buzzerPin ) ;
 
-      if ( mode_select == total_modes + 1 ) mode_select = 1 ;
-      if ( mode_select == 0 ) mode_select = total_modes ; }
+    if ( mode_select == total_modes + 1 ) mode_select = 1 ;
+    if ( mode_select == 0 ) mode_select = total_modes ; } //end if
 
-    switch ( mode_select ) {
-      case 1 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "      Voltmeter     " ) ; voltageTest ( ) ; break ;
-      case 2 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "     Ampermeter     " ) ; currentTest ( ) ; break ;
-      case 3 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "     Ohm-meter      " ) ; resistanceTest ( ) ; break ;
-      case 4 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "   Frequency-meter  " ) ; frequencyTest ( ) ;  break ;
-      case 5 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "  Continuity test   " ) ; continuityTest ( ) ; break ;
-      case 6 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "  Temperature test  " ) ; break ;
-      default : break ; } }
+  switch ( mode_select ) {
+    case 1 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "      Voltmeter     " ) ; voltageTest ( ) ; break ;
+    case 2 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "     Ampermeter     " ) ; currentTest ( ) ; break ;
+    case 3 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "     Ohm-meter      " ) ; resistanceTest ( ) ; break ;
+    case 4 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "   Frequency-meter  " ) ; frequencyTest ( ) ;  break ;
+    case 5 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "  Continuity test   " ) ; continuityTest ( ) ; break ;
+    case 6 : LCD.setCursor ( 0 , 0 ) ; LCD.print ( "  Temperature test  " ) ; break ;
+    default : break ; } } //end loop
