@@ -1,8 +1,0 @@
-LGT8F328P-LQFP32 Arduino IDE Upload Properties:
-
-Board: "DIY Board"
-CPU Frequency: "32 MHz"
-Clock Source: "External (32MHz)"
-EEPROM Size: "1KB"
-Upload Speed: "57600"
-Variant: "LGT8F328P-LQFP32"
