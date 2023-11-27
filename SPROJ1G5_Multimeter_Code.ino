@@ -7,12 +7,9 @@
 const byte total_modes = 6 , LCD_ADDR = 0x27 , LCD_ROWS = 20 , LCD_COLS = 4 , resistanceRanges = 5 ;
 const unsigned int buzzerTone = 3000 ;
 const int full = 1023 , half = 512 ;
-const unsigned long adcDelay = 4 , bounceDelay = 170 , timeOut = 100000 ;
+const unsigned long adcDelay = 4 , bounceDelay = 170 ;
 const float resistanceFactors [ 5 ] = { 100.0 , 996.0 , 99300.0 , 100000.0 , 1000000.0 } ;
-const float voltageFactor = 5.0 / 1023.0 , batHalfThreshVolt = 3.6 ; //7.5V is the minimum input voltage of the 7805
-const float freqCorrectionLimit = 30000.0 , contCutoff = 10.0 , freqCalibFactor = 1.0555 , currentCalibFactor = 1.31 , Vref = 2495.12 , currentOffset = 155.0 ;
-const float millisecs = 1000000.0 , currFactor = 1000.0 / 400.0 , unitValue = ( 5.0 / 1023.0 ) * 1000 ; // 1000mA per 400mV | (5V/1023)*1000 ~= 4.887 mV
-const String currentUnit = " mA" ;
+const float voltageFactor = 5.0 / 1023.0 ;
 
 // Button Pinouts
 // SDA - Pin A4 | SCL - Pin A5
@@ -20,13 +17,10 @@ const byte prevButtonPin = 2 , nextButtonPin = 3 , buzzerPin = 6 , freqPin = 5 ,
 const byte voltSel = 13 , relay1Pin = A0 , temperatureAdcPin = A1 , currentAdcPin = A2 , batteryAdcPin = A3 , resistanceAdcPin = A6 , voltageAdcPin = A7 ;
 
 // Variables
-byte mode_select = 1 , idx , samples , g , j , h , resHalfIndex ;
+int resistanceMeasuredValues [ 5 ] ;
+byte mode_select = 1 ;
 volatile bool next = false , prev = false ;
 bool safeOperation ;
-int resistanceMeasuredValues [ 5 ] ;
-unsigned long highPeriod , lowPeriod ;
-float frequency , readout , resMultiplyFactor , resDivider , current , resistance , contVal , shuntVoltage , currSensorVal , voltageVal , tempVal ;
-String resUnit , resRange , freqUnit ;
 
 // Declaring the LCD Display object
 LiquidCrystal_I2C LCD ( LCD_ADDR , LCD_ROWS , LCD_COLS ) ;
@@ -42,6 +36,7 @@ void selectRelayCombination ( byte selector ) {
 
 void setResistancePin ( byte onPin ) {
   // This function selects the specified MOSFET to be active, while switching off the others
+  byte g ;
   for ( g = 0 ; g < resistanceRanges ; g++ ) {
     if ( g == onPin ) { digitalWrite ( resistanceSelectPins [ g ] , LOW ) ; }
     else { digitalWrite ( resistanceSelectPins [ g ] , HIGH ) ; } } }
@@ -64,7 +59,7 @@ byte getClosestToFull ( int * array , const byte size ) {
 
 bool checkDisconnectedRes ( void ) {
   // This function checks whether there is something connected to the terminals
-  byte count = 0 ;
+  byte count = 0 , g ;
   int trigger = 80 ;
   for ( g = 0 ; g < resistanceRanges ; g++ ) {
     if ( getAbsVal ( full - resistanceMeasuredValues [ g ] ) <= trigger ) count++ ; }
@@ -72,18 +67,18 @@ bool checkDisconnectedRes ( void ) {
 
 void resistanceTest ( void ) {
 
-  // Reset variables
-  resistance = 0.0 ;
-  samples = 40 ;
+  float resistance = 0.0 , resMultiplyFactor , resDivider ;
+  byte samples = 40 , j , i , resHalfIndex ;
+  String resUnit , resRange ;
 
   // Iterate through the loop to get multiple measurements
   for ( j = 0 ; j < samples ; j++ ) {
 
     // Select the specified range and save the measured ADC value to the corresponding array element
-    for ( idx = 0 ; idx < resistanceRanges ; idx++ ) {
-      setResistancePin ( idx ) ;
+    for ( i = 0 ; i < resistanceRanges ; i++ ) {
+      setResistancePin ( i ) ;
       delay ( adcDelay ) ;
-      resistanceMeasuredValues [ idx ] = analogRead ( resistanceAdcPin ) ; } //end for
+      resistanceMeasuredValues [ i ] = analogRead ( resistanceAdcPin ) ; }
 
     // Switch off the last MOSFET after taking the final measurement
     digitalWrite ( resistanceSelectPins [ 4 ] , HIGH ) ;
@@ -101,7 +96,7 @@ void resistanceTest ( void ) {
       default : break ; }
 
     // Calculate the resistance value and add it to the variable
-    resistance += ( ( ( float ) resistanceMeasuredValues [ resHalfIndex ] * resMultiplyFactor ) / (float) getAbsVal ( full - resistanceMeasuredValues [ resHalfIndex ] ) ) ; } //end for
+    resistance += ( ( ( float ) resistanceMeasuredValues [ resHalfIndex ] * resMultiplyFactor ) / (float) getAbsVal ( full - resistanceMeasuredValues [ resHalfIndex ] ) ) ; }
   
   // Take the average value
   resistance /= ( (float) samples * resDivider ) ;
@@ -128,31 +123,25 @@ void resistanceTest ( void ) {
 
 void voltageTest ( void ) {
   // Reset the variables
-  readout = 0.0 ;
-  voltageVal = 0.0 ;
-  samples = 200 ;
+  float voltage = 0.0 , value ;
+  byte samples = 200 , h ;
 
   // Take measurement samples and adjust the range according to the input selection pin
   for ( h = 0 ; h < samples ; h++ ) {
-    voltageVal = (float) analogRead ( voltageAdcPin ) ;
+    value = (float) analogRead ( voltageAdcPin ) ;
 
-    if ( digitalRead ( voltSel ) ) voltageVal *= 5.77455 ;
-    if ( !digitalRead ( voltSel ) ) voltageVal *= 1.533 ;
+    if ( digitalRead ( voltSel ) ) value *= 5.77455 ;
+    if ( !digitalRead ( voltSel ) ) value *= 1.533 ;
 
-    voltageVal *= voltageFactor ;
-
-    //if ( voltageVal < 0.39 ) voltageVal = 0.0 ;
-    readout += voltageVal ; }
+    value *= voltageFactor ;
+    voltage += value ; }
 
   // Take the average value
-  readout /= (float) samples ;
-
-  //if ( readout >= 13.5 ) readout *= 1.015 ;
-  //if ( readout <= 4.9 ) readout *= 0.97 ;
+  voltage /= (float) samples ;
 
   // Print out the voltage value to the LCD display
   LCD.setCursor( 0 , 2 ) ;
-  LCD.print ( "     " + String ( readout ) + " V        " ) ; }
+  LCD.print ( "     " + String ( voltage ) + " V        " ) ; }
 
 // Interrupt handlers
 void nextButtonPressed ( void ) {
@@ -162,34 +151,39 @@ void prevButtonPressed ( void ) {
   prev = true ; }
 
 void currentTest ( void ) {
-  currSensorVal = 0.0 ;
-  current = 0 ;
-  samples = 100 ;
+  float value = 0.0 , current = 0 , shuntVoltage ;
+  const float currentCalibFactor = 1.31 , Vref = 2495.12 ;
+  const float currFactor = 1000.0 / 400.0 , unitValue = ( 5.0 / 1023.0 ) * 1000 ; // 1000mA per 400mV | (5V/1023)*1000 ~= 4.887 mV
+  byte samples = 100 , idx ;
 
   for ( idx = 0 ; idx < samples ; idx++ ) {
-    currSensorVal += (float) analogRead ( currentAdcPin ) ;
+    value += (float) analogRead ( currentAdcPin ) ;
     delay ( adcDelay ) ; }
 
-  currSensorVal /= (float) samples ;
-  shuntVoltage = unitValue * currSensorVal ;
+  value /= (float) samples ;
+  shuntVoltage = unitValue * value ;
   current = ( ( shuntVoltage - Vref ) * currFactor * currentCalibFactor ) ;
 
   LCD.setCursor ( 0 , 2 ) ;
-
-  if ( current > 0.0 ) LCD.print ( "     " + String ( current ) + currentUnit + "           " ) ;
+  if ( current > 0.0 ) LCD.print ( "     " + String ( current ) + " mA        " ) ;
   else LCD.print ( "         OL         " ) ; }
 
 void frequencyTest ( void ) {
   // 25Hz -> Lower-Bound Frequency | ~100 kHz -> Upper-Bound Frequency (+/- 5% error)
   // Reset the frequency and declare the number of samples to be taken from the input
-  frequency = 0.0 ;
-  samples = 30 ;
+
+  float frequency = 0.0 ;
+  const float millisecs = 1000000.0 , freqCorrectionLimit = 30000.0 , freqCalibFactor = 1.0555 ;
+  byte samples = 30 , i ;
+  String freqUnit ;
+  const unsigned long timeOut = 100000 ;
+  unsigned long highPeriod , lowPeriod ;
 
   // Sample measurements
-  for ( idx = 0 ; idx < samples ; idx++  ) {
+  for ( i = 0 ; i < samples ; i++  ) {
     highPeriod = pulseIn ( freqPin , HIGH , timeOut ) ;
     lowPeriod = pulseIn ( freqPin , LOW , timeOut ) ;
-    frequency += millisecs / (float) ( highPeriod + lowPeriod ) ; } //end for
+    frequency += millisecs / (float) ( highPeriod + lowPeriod ) ; }
 
   // Take the average for a more stable measurement
   frequency /= (float) samples ;
@@ -208,19 +202,21 @@ void frequencyTest ( void ) {
 
 void continuityTest ( void ) {
 
+  const float contCutoff = 10.0 ;
+  float value ;
+
   // Select the first range (100R) and get the resistance value
   setResistancePin ( 0 ) ;
-  contVal = (float) analogRead ( resistanceAdcPin ) ;
-  contVal = ( contVal * resistanceFactors [ 0 ] ) / (float) getAbsVal ( full - (int) contVal ) ;
+  value = (float) analogRead ( resistanceAdcPin ) ;
+  value = ( value * resistanceFactors [ 0 ] ) / (float) getAbsVal ( full - (int) value ) ;
 
   // If the measured resistance is below the threshold value, beep the buzzer and show the resistance value on the display
-  if ( contVal <= contCutoff ) {
-    resUnit = " Ohm" ;
+  if ( value <= contCutoff ) {
     tone ( buzzerPin , buzzerTone ) ;
     LCD.setCursor ( 0 , 1 ) ;
     LCD.print ( "      CONNECTED     " ) ;
     LCD.setCursor ( 0 , 2 ) ;
-    LCD.print ( "      " + String ( contVal ) + resUnit + "         " ) ; }
+    LCD.print ( "      " + String ( value ) + " Ohm      " ) ; }
   
   // Stop the beeping and show OL
   else {
@@ -233,30 +229,32 @@ void continuityTest ( void ) {
 bool batteryTest ( void ) {
   // This function checks whether the voltage of the supply 9V battery is above 7.5V,
   // which is the safe minimum input voltage of the 7805 linear voltage regulator IC.
+  const float batHalfThreshVolt = 3.6 ;
   float batVal = (float) analogRead ( batteryAdcPin ) * voltageFactor ;
   return batVal >= batHalfThreshVolt ; }
 
 void temperatureTest ( void ) {
   // This function gets the temperature value in degrees Celsius
   // Reset variables
-  tempVal = 0.0 ;
-  samples = 30 ;
+  float value = 0.0 ;
+  byte samples = 30 , j ;
 
   // Take multiple measurements
   for ( j = 0 ; j < samples ; j++ ) {
-    tempVal += LM35_Sensor.getTemp ( CELCIUS ) ;
+    value += LM35_Sensor.getTemp ( CELCIUS ) ;
     delay ( adcDelay ) ; }
   
   // Take the average value
-  tempVal /= (float) samples ;
+  value /= (float) samples ;
 
   // Print out the result
   LCD.setCursor ( 0 , 1 ) ;
-  LCD.print ( "     " + String ( tempVal ) + " \337C     " ) ; }
+  LCD.print ( "     " + String ( value ) + " \337C     " ) ; }
 
 void setup ( ) {
 
   safeOperation = batteryTest ( ) ;
+  byte h ;
 
   for ( h = 0 ; h < resistanceRanges ; h++ ) {
     pinMode ( resistanceSelectPins [ h ] , OUTPUT ) ;
@@ -292,7 +290,7 @@ void setup ( ) {
   LCD.clear ( ) ; }
 
 void loop ( ) {
-
+  byte k ;
   // Cycle measurement modes accordingly when a button is pressed
   if ( next || prev ) {
     safeOperation = batteryTest ( ) ;
@@ -301,8 +299,8 @@ void loop ( ) {
     if ( next ) { mode_select++ ; next = false ; }
     if ( prev ) { mode_select-- ; prev = false ; }
       
-    for ( h = 0 ; h < resistanceRanges ; h++ ) {
-      digitalWrite ( resistanceSelectPins [ h ] , HIGH ) ; }
+    for ( k = 0 ; k < resistanceRanges ; k++ ) {
+      digitalWrite ( resistanceSelectPins [ k ] , HIGH ) ; }
 
     LCD.clear ( ) ;
     noTone ( buzzerPin ) ;
