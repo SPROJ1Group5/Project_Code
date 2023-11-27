@@ -70,6 +70,7 @@ void resistanceTest ( void ) {
   const float resistanceFactors [ 5 ] = { 100.0 , 996.0 , 9930.0 , 100000.0 , 1000000.0 } ;
   const int full = 1023 ;
   byte samples = 40 , j , i , resHalfIndex ;
+  const char ohmSymbol = 0xF4 ;
   String resUnit , resRange ;
 
   // Iterate through the loop to get multiple measurements
@@ -89,11 +90,11 @@ void resistanceTest ( void ) {
 
     // Adjust variables according to the selected range
     switch ( resHalfIndex ) {
-      case 0  : resMultiplyFactor = resistanceFactors [ 0 ] ; resUnit = " Ohm"   ; resRange = "100R" ; resDivider = 1.0    ; break ;
-      case 1  : resMultiplyFactor = resistanceFactors [ 1 ] ; resUnit = " Ohm"   ; resRange = "1K"   ; resDivider = 1.0    ; break ;
-      case 2  : resMultiplyFactor = resistanceFactors [ 2 ] ; resUnit = " kOhm"  ; resRange = "10K"  ; resDivider = 1000.0 ; break ;
-      case 3  : resMultiplyFactor = resistanceFactors [ 3 ] ; resUnit = " kOhm"  ; resRange = "100K" ; resDivider = 1000.0 ; break ;
-      case 4  : resMultiplyFactor = resistanceFactors [ 4 ] ; resUnit = " kOhm"  ; resRange = "1M"   ; resDivider = 1000.0 ; break ;
+      case 0  : resMultiplyFactor = resistanceFactors [ 0 ] ; resUnit = " "   ; resRange = "100R" ; resDivider = 1.0    ; break ;
+      case 1  : resMultiplyFactor = resistanceFactors [ 1 ] ; resUnit = " "   ; resRange = "1K"   ; resDivider = 1.0    ; break ;
+      case 2  : resMultiplyFactor = resistanceFactors [ 2 ] ; resUnit = " k"  ; resRange = "10K"  ; resDivider = 1000.0 ; break ;
+      case 3  : resMultiplyFactor = resistanceFactors [ 3 ] ; resUnit = " k"  ; resRange = "100K" ; resDivider = 1000.0 ; break ;
+      case 4  : resMultiplyFactor = resistanceFactors [ 4 ] ; resUnit = " k"  ; resRange = "1M"   ; resDivider = 1000.0 ; break ;
       default : break ; }
 
     // Calculate the resistance value and add it to the variable
@@ -113,13 +114,13 @@ void resistanceTest ( void ) {
     // Display resistance in Mega Ohms
     if ( resHalfIndex == 4 && resistance > 1000.0 ) {
       resistance /= 1000.0 ;
-      resUnit = " MOhm" ; }
+      resUnit = " M" ; }
 
     // Print out the automatically selected measurement range and the resistance value
     LCD.setCursor ( 0 , 1 ) ;
     LCD.print ( "     Range: " + resRange + "    " ) ;
     LCD.setCursor ( 0 , 2 ) ;
-    LCD.print ( "    " + String ( resistance ) + resUnit + "        " ) ; } }
+    LCD.print ( "      " + String ( resistance ) + resUnit + ohmSymbol + "    " ) ; } }
 
 void voltageTest ( void ) {
   // Reset the variables
@@ -138,7 +139,6 @@ void voltageTest ( void ) {
 
   // Take the average value
   voltage /= (float) samples ;
-
   // Print out the voltage value to the LCD display
   LCD.setCursor( 0 , 2 ) ;
   LCD.print ( "     " + String ( voltage ) + " V        " ) ; }
@@ -204,6 +204,7 @@ void continuityTest ( void ) {
 
   const float contCutoff = 10.0 , factor = 100.0 ;
   const int full = 1023 ;
+  const char ohmSymbol = 0xF4 ;
   float value ;
 
   // Select the first range (100R) and get the resistance value
@@ -217,7 +218,7 @@ void continuityTest ( void ) {
     LCD.setCursor ( 0 , 1 ) ;
     LCD.print ( "      CONNECTED     " ) ;
     LCD.setCursor ( 0 , 2 ) ;
-    LCD.print ( "      " + String ( value ) + " Ohm      " ) ; }
+    LCD.print ( "      " + String ( value ) + " " + ohmSymbol + "         " ) ; }
   
   // Stop the beeping and show OL
   else {
@@ -228,16 +229,17 @@ void continuityTest ( void ) {
       LCD.print ( "     Open Loop      " ) ; } }
 
 bool batteryTest ( void ) {
-  // This function checks whether the voltage of the supply 9V battery is above 7.5V,
+  // This function checks whether the voltage of the supply 9V battery is the threshold voltage,
   // which is the safe minimum input voltage of the 7805 linear voltage regulator IC.
   const float batHalfThreshVolt = 3.6 ;
-  float batVal = (float) analogRead ( batteryAdcPin ) * voltageFactor ;
-  return batVal >= batHalfThreshVolt ; }
+  float value = (float) analogRead ( batteryAdcPin ) * voltageFactor ;
+  return value >= batHalfThreshVolt ; }
 
 void temperatureTest ( void ) {
   // This function gets the temperature value in degrees Celsius
   // Reset variables
   float value = 0.0 ;
+  const char degreeSymbol = 0xDF ;
   byte samples = 30 , j ;
 
   // Take multiple measurements
@@ -249,8 +251,8 @@ void temperatureTest ( void ) {
   value /= (float) samples ;
 
   // Print out the result
-  LCD.setCursor ( 0 , 1 ) ;
-  LCD.print ( "     " + String ( value ) + " \337C     " ) ; }
+  LCD.setCursor ( 0 , 2 ) ;
+  LCD.print ( "     " + String ( value ) + " " + degreeSymbol + "C       " ) ; }
 
 void setup ( ) {
 
