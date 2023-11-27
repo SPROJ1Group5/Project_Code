@@ -5,7 +5,7 @@
 
 // Defined Constants
 const byte total_modes = 6 , LCD_ADDR = 0x27 , LCD_ROWS = 20 , LCD_COLS = 4 , resistanceRanges = 5 ;
-const unsigned int buzzerTone = 3000 ;
+const unsigned int buzzerTone = 1000 ;
 const unsigned long adcDelay = 4 , bounceDelay = 170 ;
 const float voltageFactor = 5.0 / 1023.0 ;
 
@@ -18,7 +18,6 @@ const byte voltSel = 13 , relay1Pin = A0 , temperatureAdcPin = A1 , currentAdcPi
 int resistanceMeasuredValues [ 5 ] ;
 byte mode_select = 1 ;
 volatile bool next = false , prev = false ;
-bool safeOperation ;
 
 // Declaring the LCD Display object
 LiquidCrystal_I2C LCD ( LCD_ADDR , LCD_ROWS , LCD_COLS ) ;
@@ -124,24 +123,24 @@ void resistanceTest ( void ) {
 
 void voltageTest ( void ) {
   // Reset the variables
+  const float lowerBound = 0.33 , upperCalibFactor = 3.96 ;
   float voltage = 0.0 , value ;
-  byte samples = 200 , h ;
+  byte samples = 100 , h ;
 
   // Take measurement samples and adjust the range according to the input selection pin
   for ( h = 0 ; h < samples ; h++ ) {
     value = (float) analogRead ( voltageAdcPin ) ;
-
-    if ( digitalRead ( voltSel ) ) value *= 5.77455 ;
-    if ( !digitalRead ( voltSel ) ) value *= 1.533 ;
-
+    if ( digitalRead ( voltSel ) ) value *= upperCalibFactor ;
     value *= voltageFactor ;
     voltage += value ; }
 
   // Take the average value
   voltage /= (float) samples ;
-  // Print out the voltage value to the LCD display
+
   LCD.setCursor( 0 , 2 ) ;
-  LCD.print ( "     " + String ( voltage ) + " V        " ) ; }
+  // Print out the voltage value to the LCD display
+  if ( voltage >= lowerBound ) LCD.print ( "       " + String ( voltage ) + " V        " ) ;
+  else LCD.print ( "                    " ) ; }
 
 // Interrupt handlers
 void nextButtonPressed ( void ) {
@@ -228,12 +227,14 @@ void continuityTest ( void ) {
       LCD.setCursor ( 0 , 2 ) ;
       LCD.print ( "     Open Loop      " ) ; } }
 
-bool batteryTest ( void ) {
+void batteryTest ( void ) {
   // This function checks whether the voltage of the supply 9V battery is the threshold voltage,
   // which is the safe minimum input voltage of the 7805 linear voltage regulator IC.
-  const float batHalfThreshVolt = 3.6 ;
+  const float batHalfThreshVolt = 3.5 ;
   float value = (float) analogRead ( batteryAdcPin ) * voltageFactor ;
-  return value >= batHalfThreshVolt ; }
+  if ( value <= batHalfThreshVolt ) {
+    LCD.setCursor ( 0 , 3 ) ;
+    LCD.print ( "  Change Battery!   " ) ; } }
 
 void temperatureTest ( void ) {
   // This function gets the temperature value in degrees Celsius
@@ -255,8 +256,7 @@ void temperatureTest ( void ) {
   LCD.print ( "     " + String ( value ) + " " + degreeSymbol + "C       " ) ; }
 
 void setup ( ) {
-
-  safeOperation = batteryTest ( ) ;
+  batteryTest ( ) ;
   byte h ;
 
   for ( h = 0 ; h < resistanceRanges ; h++ ) {
@@ -296,7 +296,6 @@ void loop ( ) {
   byte k ;
   // Cycle measurement modes accordingly when a button is pressed
   if ( next || prev ) {
-    safeOperation = batteryTest ( ) ;
     delay ( bounceDelay ) ;
 
     if ( next ) { mode_select++ ; next = false ; }
@@ -307,21 +306,18 @@ void loop ( ) {
 
     LCD.clear ( ) ;
     noTone ( buzzerPin ) ;
+    batteryTest ( ) ;
 
     if ( mode_select == total_modes + 1 ) mode_select = 1 ;
     if ( mode_select == 0 ) mode_select = total_modes ; }
 
   LCD.setCursor ( 0 , 0 ) ;
-
-  if ( safeOperation ) {
-    // Switch to the next measurement mode
-    switch ( mode_select ) {
-      case 1 : LCD.print ( "      Voltmeter     " ) ; selectRelayCombination ( 0 ) ; voltageTest     ( ) ; break ;
-      case 2 : LCD.print ( "     Ampermeter     " ) ; selectRelayCombination ( 0 ) ; currentTest     ( ) ; break ;
-      case 3 : LCD.print ( "     Ohm-meter      " ) ; selectRelayCombination ( 2 ) ; resistanceTest  ( ) ; break ;
-      case 4 : LCD.print ( "   Frequency-meter  " ) ; selectRelayCombination ( 1 ) ; frequencyTest   ( ) ; break ;
-      case 5 : LCD.print ( "  Continuity test   " ) ; selectRelayCombination ( 2 ) ; continuityTest  ( ) ; break ;
-      case 6 : LCD.print ( "  Temperature test  " ) ; selectRelayCombination ( 0 ) ; temperatureTest ( ) ; break ; 
-      default : break ; } }
-  
-  else LCD.print ( "  Change Battery!   " ) ; }
+  // Switch to the next measurement mode
+  switch ( mode_select ) {
+    case 1 : LCD.print ( "      Voltmeter     " ) ; selectRelayCombination ( 0 ) ; voltageTest     ( ) ; break ;
+    case 2 : LCD.print ( "     Ampermeter     " ) ; selectRelayCombination ( 0 ) ; currentTest     ( ) ; break ;
+    case 3 : LCD.print ( "     Ohm-meter      " ) ; selectRelayCombination ( 2 ) ; resistanceTest  ( ) ; break ;
+    case 4 : LCD.print ( "   Frequency-meter  " ) ; selectRelayCombination ( 1 ) ; frequencyTest   ( ) ; break ;
+    case 5 : LCD.print ( "  Continuity test   " ) ; selectRelayCombination ( 2 ) ; continuityTest  ( ) ; break ;
+    case 6 : LCD.print ( "  Temperature test  " ) ; selectRelayCombination ( 0 ) ; temperatureTest ( ) ; break ; 
+    default : break ; } }
