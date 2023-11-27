@@ -6,9 +6,7 @@
 // Defined Constants
 const byte total_modes = 6 , LCD_ADDR = 0x27 , LCD_ROWS = 20 , LCD_COLS = 4 , resistanceRanges = 5 ;
 const unsigned int buzzerTone = 3000 ;
-const int full = 1023 , half = 512 ;
 const unsigned long adcDelay = 4 , bounceDelay = 170 ;
-const float resistanceFactors [ 5 ] = { 100.0 , 996.0 , 99300.0 , 100000.0 , 1000000.0 } ;
 const float voltageFactor = 5.0 / 1023.0 ;
 
 // Button Pinouts
@@ -38,8 +36,8 @@ void setResistancePin ( byte onPin ) {
   // This function selects the specified MOSFET to be active, while switching off the others
   byte g ;
   for ( g = 0 ; g < resistanceRanges ; g++ ) {
-    if ( g == onPin ) { digitalWrite ( resistanceSelectPins [ g ] , LOW ) ; }
-    else { digitalWrite ( resistanceSelectPins [ g ] , HIGH ) ; } } }
+    if ( g == onPin ) digitalWrite ( resistanceSelectPins [ g ] , LOW ) ;
+    else digitalWrite ( resistanceSelectPins [ g ] , HIGH ) ; } }
 
 int getAbsVal ( int num  ) {
   // This function returns the absolute value of the input parameter
@@ -48,9 +46,10 @@ int getAbsVal ( int num  ) {
 
 byte getClosestToFull ( int * array , const byte size ) {
   // This function iterates through an array to find the index of the element that is closest to the value 512 and returns this index
+  const int half = 512 ;
   int minValue = getAbsVal ( array [ 0 ] - half ) , currentAbsVal ;
-  byte minIndex = 0 ;
-  for ( byte i = 1 ; i < size ; i++ ) {
+  byte minIndex = 0 , i ;
+  for ( i = 1 ; i < size ; i++ ) {
     currentAbsVal = getAbsVal ( array [ i ] - half ) ;
     if ( currentAbsVal < minValue ) {
       minValue = currentAbsVal ;
@@ -60,14 +59,16 @@ byte getClosestToFull ( int * array , const byte size ) {
 bool checkDisconnectedRes ( void ) {
   // This function checks whether there is something connected to the terminals
   byte count = 0 , g ;
-  int trigger = 80 ;
+  const int trigger = 80 , full = 1023 ;
   for ( g = 0 ; g < resistanceRanges ; g++ ) {
     if ( getAbsVal ( full - resistanceMeasuredValues [ g ] ) <= trigger ) count++ ; }
   return count == resistanceRanges ; }
 
 void resistanceTest ( void ) {
 
-  float resistance = 0.0 , resMultiplyFactor , resDivider ;
+  float resistance = 0.0 , resMultiplyFactor = 1.0 , resDivider = 1.0 ;
+  const float resistanceFactors [ 5 ] = { 100.0 , 996.0 , 9930.0 , 100000.0 , 1000000.0 } ;
+  const int full = 1023 ;
   byte samples = 40 , j , i , resHalfIndex ;
   String resUnit , resRange ;
 
@@ -109,7 +110,6 @@ void resistanceTest ( void ) {
     LCD.print ( "      Overload      " ) ; }
 
   else {
-
     // Display resistance in Mega Ohms
     if ( resHalfIndex == 4 && resistance > 1000.0 ) {
       resistance /= 1000.0 ;
@@ -202,13 +202,14 @@ void frequencyTest ( void ) {
 
 void continuityTest ( void ) {
 
-  const float contCutoff = 10.0 ;
+  const float contCutoff = 10.0 , factor = 100.0 ;
+  const int full = 1023 ;
   float value ;
 
   // Select the first range (100R) and get the resistance value
   setResistancePin ( 0 ) ;
   value = (float) analogRead ( resistanceAdcPin ) ;
-  value = ( value * resistanceFactors [ 0 ] ) / (float) getAbsVal ( full - (int) value ) ;
+  value = ( value * factor ) / (float) getAbsVal ( full - (int) value ) ;
 
   // If the measured resistance is below the threshold value, beep the buzzer and show the resistance value on the display
   if ( value <= contCutoff ) {
