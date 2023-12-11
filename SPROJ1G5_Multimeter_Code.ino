@@ -17,8 +17,8 @@ const byte voltSel = 13 , relay1Pin = A0 , temperatureAdcPin = A1 , currentAdcPi
 
 // Variables
 int resistanceMeasuredValues [ 5 ] ;
-byte mode_select = 1 ;
-volatile bool next = false , prev = false ;
+byte mode_select ;
+volatile bool next , prev ;
 
 // Declaring the LCD Display object
 LiquidCrystal_I2C LCD ( LCD_ADDR , LCD_ROWS , LCD_COLS ) ;
@@ -211,7 +211,7 @@ void currentTest ( void )
 
   value /= (float) samples ;
   shuntVoltage = unitValue * value ;
-  current = ( ( shuntVoltage - Vref ) * currFactor * currentCalibFactor ) ;
+  current = ( shuntVoltage - Vref ) * currFactor * currentCalibFactor ;
 
   LCD.setCursor ( 0 , 2 ) ;
 
@@ -330,8 +330,10 @@ void temperatureTest ( void )
 
 void setup ( )
 {
-  batteryTest ( ) ;
-  byte h ;
+  // Setting up initial values
+  next = true ;
+  prev = false ;
+  byte h , mode_select = 0 ; ;
 
   for ( h = 0 ; h < resistanceRanges ; h++ )
   {
@@ -367,6 +369,8 @@ void setup ( )
   LCD.init ( ) ;
   LCD.backlight ( ) ;
   LCD.clear ( ) ;
+
+  batteryTest ( ) ;
 }
 
 void loop ( )
@@ -399,20 +403,31 @@ void loop ( )
     batteryTest ( ) ;
 
     if ( mode_select == total_modes + 1 ) mode_select = 1 ;
-
     if ( mode_select == 0 ) mode_select = total_modes ;
+
+    LCD.setCursor ( 0 , 0 ) ;
+
+    switch ( mode_select )
+    {
+      case 1 : LCD.print ( "      Voltmeter     " ) ; selectRelayCombination ( 0 ) ; break ;
+      case 2 : LCD.print ( "     Ampermeter     " ) ; selectRelayCombination ( 0 ) ; break ;
+      case 3 : LCD.print ( "     Ohm-meter      " ) ; selectRelayCombination ( 2 ) ; break ;
+      case 4 : LCD.print ( "   Frequency-meter  " ) ; selectRelayCombination ( 1 ) ; break ;
+      case 5 : LCD.print ( "  Continuity test   " ) ; selectRelayCombination ( 2 ) ; break ;
+      case 6 : LCD.print ( "  Temperature test  " ) ; selectRelayCombination ( 0 ) ; break ;
+      default : break ;
+    }
   }
 
-  LCD.setCursor ( 0 , 0 ) ;
   // Switch to the next measurement mode
   switch ( mode_select )
   {
-    case 1 : LCD.print ( "      Voltmeter     " ) ; selectRelayCombination ( 0 ) ; voltageTest     ( ) ; break ;
-    case 2 : LCD.print ( "     Ampermeter     " ) ; selectRelayCombination ( 0 ) ; currentTest     ( ) ; break ;
-    case 3 : LCD.print ( "     Ohm-meter      " ) ; selectRelayCombination ( 2 ) ; resistanceTest  ( ) ; break ;
-    case 4 : LCD.print ( "   Frequency-meter  " ) ; selectRelayCombination ( 1 ) ; frequencyTest   ( ) ; break ;
-    case 5 : LCD.print ( "  Continuity test   " ) ; selectRelayCombination ( 2 ) ; continuityTest  ( ) ; break ;
-    case 6 : LCD.print ( "  Temperature test  " ) ; selectRelayCombination ( 0 ) ; temperatureTest ( ) ; break ; 
+    case 1 : voltageTest     ( ) ; break ;
+    case 2 : currentTest     ( ) ; break ;
+    case 3 : resistanceTest  ( ) ; break ;
+    case 4 : frequencyTest   ( ) ; break ;
+    case 5 : continuityTest  ( ) ; break ;
+    case 6 : temperatureTest ( ) ; break ; 
     default : break ;
   }
 }
