@@ -1,7 +1,5 @@
-// Include necessary libraries
-#include <Wire.h>
+// Include the library for the display
 #include <LiquidCrystal_I2C.h>
-#include <LM35.h>
 
 // Defined Constants
 const byte total_modes = 6 , LCD_ADDR = 0x27 , LCD_ROWS = 20 , LCD_COLS = 4 , resistanceRanges = 5 ;
@@ -22,7 +20,6 @@ volatile bool next , prev ;
 
 // Declaring the LCD Display object
 LiquidCrystal_I2C LCD ( LCD_ADDR , LCD_ROWS , LCD_COLS ) ;
-LM35 LM35_Sensor ( (int) temperatureAdcPin ) ;
 
 void selectRelayCombination ( byte selector ) {
   // This function manipulates the output pins that connect to the relays in order to switch the input to the correct circuit
@@ -172,7 +169,7 @@ void prevButtonPressed ( void ) {
 }
 
 void currentTest ( void ) {
-  float value = 0.0 , current = 0 , shuntVoltage ;
+  float value = 0.0 , current = 0.0 , shuntVoltage ;
   const float currentCalibFactor = 1.31 , Vref = 2495.12 ;
   const float currFactor = 1000.0 / 400.0 , unitValue = ( 5.0 / 1023.0 ) * 1000 ; // 1000mA per 400mV | (5V/1023)*1000 ~= 4.887 mV
   byte samples = 100 , idx ;
@@ -194,7 +191,6 @@ void currentTest ( void ) {
 
 void frequencyTest ( void ) {
   // 25Hz -> Lower-Bound Frequency | ~100 kHz -> Upper-Bound Frequency (+/- 5% error)
-  // Reset the frequency and declare the number of samples to be taken from the input
 
   float frequency = 0.0 ;
   const float millisecs = 1000000.0 , freqCorrectionLimit = 30000.0 , freqCalibFactor = 1.056 ;
@@ -272,22 +268,23 @@ void batteryTest ( void ) {
 void temperatureTest ( void ) {
   // This function gets the temperature value in degrees Celsius
   // Reset variables
-  float value = 0.0 ;
+  float celsius = 0.0 ;
+  const float factor = ( ( 5.0 / 1023.0 ) / 0.01 ) ;
   const char degreeSymbol = 0xDF ;
   byte samples = 30 , j ;
 
   // Take multiple measurements
   for ( j = 0 ; j < samples ; j++ ) {
-    value += LM35_Sensor.getTemp ( CELCIUS ) ;
+    celsius += analogRead ( temperatureAdcPin ) * factor ;
     delay ( adcDelay ) ;
   }
   
   // Take the average value
-  value /= (float) samples ;
+  celsius /= (float) samples ;
 
   // Print out the result
   LCD.setCursor ( 0 , 2 ) ;
-  LCD.print ( "     " + String ( value ) + " " + degreeSymbol + "C       " ) ;
+  LCD.print ( "     " + String ( celsius ) + " " + degreeSymbol + "C       " ) ;
 }
 
 void setup ( ) {
