@@ -13,10 +13,11 @@ const char ohmSymbol = 0xF4 ;
 const byte prevButtonPin = 2 , nextButtonPin = 3 , buzzerPin = 6 , freqPin = 5 , relay2Pin = 7 , resistanceSelectPins [ 5 ] = { 8 , 9 , 10 , 11 , 12 } ;
 const byte voltSel = 13 , relay1Pin = A0 , temperatureAdcPin = A1 , currentAdcPin = A2 , batteryAdcPin = A3 , resistanceAdcPin = A6 , voltageAdcPin = A7 ;
 
-// Variables
+// Global Variables
 int resistanceMeasuredValues [ 5 ] ;
 byte mode_select ;
 volatile bool next , prev ;
+bool once = true;
 
 // Declaring the LCD Display object
 LiquidCrystal_I2C LCD ( LCD_ADDR , LCD_ROWS , LCD_COLS ) ;
@@ -112,7 +113,7 @@ void resistanceTest ( void ) {
     // Calculate the resistance value and add it to the variable
     resistance += ( ( float ) resistanceMeasuredValues [ resHalfIndex ] * resMultiplyFactor ) / (float) ( full - resistanceMeasuredValues [ resHalfIndex ] ) ;
   }
-  
+
   // Take the average value
   resistance /= (float) samples * resDivider ;
 
@@ -169,10 +170,14 @@ void prevButtonPressed ( void ) {
 }
 
 void currentTest ( void ) {
-  float value = 0.0 , current = 0.0 , shuntVoltage ;
-  const float currentCalibFactor = 1.31 , Vref = 2495.12 ;
+  float value = 0.0 , current = 0.0 , shuntVoltage , Vref ;
   const float currFactor = 1000.0 / 400.0 , unitValue = ( 5.0 / 1023.0 ) * 1000 ; // 1000mA per 400mV | (5V/1023)*1000 ~= 4.887 mV
-  byte samples = 100 , idx ;
+  byte samples = 200 , idx ;
+
+  if ( once ) {
+    Vref = analogRead ( currentAdcPin ) ;
+    once = false ;
+  }
 
   for ( idx = 0 ; idx < samples ; idx++ ) {
     value += (float) analogRead ( currentAdcPin ) ;
@@ -181,7 +186,7 @@ void currentTest ( void ) {
 
   value /= (float) samples ;
   shuntVoltage = unitValue * value ;
-  current = ( shuntVoltage - Vref ) * currFactor * currentCalibFactor ;
+  current = ( shuntVoltage - Vref ) * currFactor ;
 
   LCD.setCursor ( 0 , 2 ) ;
 
@@ -242,14 +247,14 @@ void continuityTest ( void ) {
     LCD.setCursor ( 0 , 2 ) ;
     LCD.print ( "      " + String ( value ) + " " + ohmSymbol + "         " ) ;
   }
-  
+
   // Stop the beeping and show OL
   else {
-      noTone ( buzzerPin ) ;
-      LCD.setCursor ( 0 , 1 ) ;
-      LCD.print ( "                    " ) ;
-      LCD.setCursor ( 0 , 2 ) ;
-      LCD.print ( "     Open Loop      " ) ;
+    noTone ( buzzerPin ) ;
+    LCD.setCursor ( 0 , 1 ) ;
+    LCD.print ( "                    " ) ;
+    LCD.setCursor ( 0 , 2 ) ;
+    LCD.print ( "     Open Loop      " ) ;
   }
 }
 
@@ -278,7 +283,7 @@ void temperatureTest ( void ) {
     celsius += analogRead ( temperatureAdcPin ) * factor ;
     delay ( adcDelay ) ;
   }
-  
+
   // Take the average value
   celsius /= (float) samples ;
 
@@ -345,7 +350,7 @@ void loop ( ) {
       mode_select-- ;
       prev = false ;
     }
-      
+
     for ( k = 0 ; k < resistanceRanges ; k++ ) {
       digitalWrite ( resistanceSelectPins [ k ] , HIGH ) ;
     }
@@ -377,7 +382,7 @@ void loop ( ) {
     case 3 : resistanceTest  ( ) ; break ;
     case 4 : frequencyTest   ( ) ; break ;
     case 5 : continuityTest  ( ) ; break ;
-    case 6 : temperatureTest ( ) ; break ; 
+    case 6 : temperatureTest ( ) ; break ;
     default : break ;
   }
 }
